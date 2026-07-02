@@ -38,14 +38,19 @@ ENV PATH="/usr/local/zig:${PATH}"
 
 # 4. Nuitka Kurulumu
 RUN zig version
+# 4. Çalışma dizinini ve bağımlılıkları ayarla
+WORKDIR /app
+COPY requirements.txt ./requirements.txt
+
+# Şimdi venv oluştur ve paketleri kur
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir nuitka
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /app
+# Şimdi kaynak kodları kopyala
 COPY src/ ./src/
 
-# 5. Derleme (LDFLAGS ve derleyici değişkenlerini kalıcı yap)
+# 5. Derleme
 ENV LDFLAGS="-static -Wl,-Bstatic"
 RUN mkdir -p build && \
     nuitka --standalone --static-libpython=yes --zig --output-dir=/dist src/main.py && \
