@@ -13,6 +13,6 @@ mount -t devtmpfs dev /dev
 
 echo "starting init"
 
-/bin/ris
+exec /bin/ris
 
 
