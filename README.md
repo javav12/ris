@@ -41,10 +41,10 @@ mount -t devtmpfs dev /dev
 
 echo "starting init"
 
-exec /bin/ris
+exec /sbin/ris
 
 ```
 
 5. copy script as init
 
-6. copy ris in /bin/ris
+6. copy ris in /sbin/ris
