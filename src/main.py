@@ -2,15 +2,16 @@ import logging
 import os
 import signal
 from pathlib import Path
+from time import sleep
 
 import power
 import reaper
 
 # idk every time i test it's 74 but i made it global so i can change it later if needed
 service_starter_pid = 74
-''' wait time for the service starter to restart 
+""" wait time for the service starter to restart 
 the system if it dies, in seconds. This is to prevent a 
-reboot loop if the service starter dies immediately after being spawned. '''
+reboot loop if the service starter dies immediately after being spawned. """
 burn_out = 0
 # spawn (fork exec) a program (non blocking)
 def spawn(path: str, args):
@@ -46,7 +47,7 @@ def prepare() -> None:
     try:
         Path("/etc/ris").mkdir(parents=True, exist_ok=True)
     except OSError as e:
-        logging.error(f"Error occurred while creating '/etc/ris' directory: {e}")
+        logging.exception(f"Error occurred while creating '/etc/ris' directory: {e}")
 
 
 def shutdown_handler(signal, frame) -> None:
@@ -67,9 +68,11 @@ def reaper_handler(signal, frame) -> None:
 
 def service_starter_spawn(burn_out: int) -> int:
     global service_starter_pid
+    sleep(burn_out)  # Wait for the specified burn out time before respawning
     burn_out *= 2
     # Spawn the service starter process
     service_starter_pid = spawn("/bin/sh", ["sh","-i"])
+    reaper.ssd = False  # Reset the service_starter_dead flag
     return service_starter_pid
 
 def main() -> None:
@@ -77,7 +80,7 @@ def main() -> None:
 
     # Set up signal handler for SIGCHLD to reap child processes
     signal.signal(signal.SIGCHLD, reaper_handler)
-    
+
     # Prepare the system environment
     prepare()
 
@@ -86,9 +89,8 @@ def main() -> None:
     logging.basicConfig(filename="/run/ris.log", level=logging.DEBUG, format=FORMAT)
     logging.debug(f"Main process PID: {os.getpid()}")
 
-    logging.info(f"Service starter PID: {service_starter_pid}")
-
     service_starter_pid = service_starter_spawn(burn_out)  # Spawn the service starter process
+    logging.info(f"Service starter PID: {service_starter_pid}")
     burn_out = 1  # Set the initial burn out time to 1 seconds
     # Initialize the reaper with the service starter PID
     reaper.init(service_starter_pid)

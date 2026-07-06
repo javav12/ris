@@ -2,7 +2,7 @@ import logging
 import os
 from pathlib import Path
 from shutil import copy2
-from time import sleep,strftime
+from time import sleep, strftime
 
 logger = logging.getLogger(__name__)
 

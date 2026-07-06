@@ -3,8 +3,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
-''' idk every time i test it's 74 but i made it global 
-so i can change it later if needed ssp is starter_service_pid '''
+""" idk every time i test it's 74 but i made it global 
+so i can change it later if needed ssp is starter_service_pid """
 ssp = 74
 ssd = False  # service_starter_dead flag to indicate if the service starter process has exited
 def init(starter_service_pid):
