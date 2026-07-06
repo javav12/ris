@@ -8,8 +8,10 @@ import reaper
 
 # idk every time i test it's 74 but i made it global so i can change it later if needed
 service_starter_pid = 74
-
-
+''' wait time for the service starter to restart 
+the system if it dies, in seconds. This is to prevent a 
+reboot loop if the service starter dies immediately after being spawned. '''
+burn_out = 0
 # spawn (fork exec) a program (non blocking)
 def spawn(path: str, args):
     pid = os.fork()
@@ -56,12 +58,25 @@ def reboot_handler(signal, frame) -> None:
     global service_starter_pid
     power.reboot(service_starter_pid)
 
+def reaper_handler(signal, frame) -> None:
+    global service_starter_pid,burn_out
+    reaper.reap_children(signal, frame)
+    if reaper.ssd:  # Check if the service starter process has exited
+        logging.info("Service starter process has exited. Initiating shutdown.")
+        service_starter_pid = service_starter_spawn(burn_out)  # Respawn the service starter process
+
+def service_starter_spawn(burn_out: int) -> int:
+    global service_starter_pid
+    burn_out *= 2
+    # Spawn the service starter process
+    service_starter_pid = spawn("/bin/sh", ["sh","-i"])
+    return service_starter_pid
 
 def main() -> None:
-    global service_starter_pid
+    global service_starter_pid,burn_out
 
     # Set up signal handler for SIGCHLD to reap child processes
-    signal.signal(signal.SIGCHLD, reaper.reap_children)
+    signal.signal(signal.SIGCHLD, reaper_handler)
     
     # Prepare the system environment
     prepare()
@@ -71,14 +86,17 @@ def main() -> None:
     logging.basicConfig(filename="/run/ris.log", level=logging.DEBUG, format=FORMAT)
     logging.debug(f"Main process PID: {os.getpid()}")
 
-    # Spawn the service starter process
-    service_starter_pid = spawn("/bin/sh", ["sh"])
     logging.info(f"Service starter PID: {service_starter_pid}")
+
+    service_starter_pid = service_starter_spawn(burn_out)  # Spawn the service starter process
+    burn_out = 1  # Set the initial burn out time to 1 seconds
+    # Initialize the reaper with the service starter PID
+    reaper.init(service_starter_pid)
 
     # Set up signal handlers for shutdown and reboot
     signal.signal(signal.SIGTERM, shutdown_handler)
     signal.signal(signal.SIGINT, reboot_handler)
-    
+
     while True:
         signal.pause()  # Wait for signals
 

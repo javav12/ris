@@ -42,7 +42,7 @@ def umount_all(mounts) -> None:
     sorted_mounts = sorted(mounts, key=lambda x: len(x["mount_point"]), reverse=True)
 
     # the default protected paths that should not be unmounted
-    protected_paths = {"/sys", "/proc", "/dev", "/"}
+    protected_paths = {"/sys", "/proc","/run","/dev", "/"}
 
     for mount in sorted_mounts:
         path = mount["mount_point"]
@@ -75,8 +75,13 @@ def prepare_to_stop(service_starter_pid) -> int:
             f"Sent SIGTERM to service starter process with PID {service_starter_pid}",
         )
         sleep(30)  # Wait for 30 seconds to allow the process to terminate gracefully
-        os.kill(service_starter_pid, 9)  # 9 is the signal number for SIGKILL
-        logger.info(f"Killed service starter process with PID {service_starter_pid}")
+        try:
+            os.kill(service_starter_pid, 9)  # 9 is the signal number for SIGKILL
+            logger.info(f"Killed service starter process with PID {service_starter_pid}")
+        except ProcessLookupError:
+            logger.info(
+                f"Service starter process {service_starter_pid} already exited",
+            )
         os.sync()  # Flush filesystem buffers again
         logger.info("Filesystem buffers flushed.")
         umount_all(mounts)  # Unmount all mounts except the protected ones

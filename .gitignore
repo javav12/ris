@@ -1,6 +1,6 @@
 build/
 venv/
 main.bin
-src/__pycache__/
+__pycache__/
 .vscode/
 .ruff_cache/
