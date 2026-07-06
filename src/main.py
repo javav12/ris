@@ -64,11 +64,12 @@ def reaper_handler(signal, frame) -> None:
     reaper.reap_children(signal, frame)
     if reaper.ssd:  # Check if the service starter process has exited
         logging.info("Service starter process has exited. Initiating shutdown.")
-        service_starter_pid = service_starter_spawn(burn_out)  # Respawn the service starter process
+        service_starter_pid = service_starter_spawn()  # Respawn the service starter process
 
-def service_starter_spawn(burn_out: int) -> int:
-    global service_starter_pid
-    sleep(burn_out)  # Wait for the specified burn out time before respawning
+def service_starter_spawn() -> int:
+    global service_starter_pid, burn_out
+    #find a way to not block the main process while waiting for the service starter to start, maybe use a thread
+    # sleep(burn_out)  # Wait for the specified burn out time before respawning
     burn_out *= 2
     # Spawn the service starter process
     service_starter_pid = spawn("/bin/sh", ["sh","-i"])
@@ -89,7 +90,7 @@ def main() -> None:
     logging.basicConfig(filename="/run/ris.log", level=logging.DEBUG, format=FORMAT)
     logging.debug(f"Main process PID: {os.getpid()}")
 
-    service_starter_pid = service_starter_spawn(burn_out)  # Spawn the service starter process
+    service_starter_pid = service_starter_spawn()  # Spawn the service starter process
     logging.info(f"Service starter PID: {service_starter_pid}")
     burn_out = 1  # Set the initial burn out time to 1 seconds
     # Initialize the reaper with the service starter PID
