@@ -1,0 +1,6 @@
+select = ["ALL"]
+
+line-length = 88
+
+[lint]
+explicit-preview-rules = true

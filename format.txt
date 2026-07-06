@@ -1,0 +1,233 @@
+--- src/main.py
++++ src/main.py
+@@ -4,62 +4,70 @@
+ import reaper
+ from pathlib import Path
+ import power
++
+ print("hello world")
+ print(os.getpid())
+ os.system("echo hi")
+ 
+-service_starter_pid = 74 # idk every time this its 74 but i made it global so i can change it later if needed
++service_starter_pid = 74  # idk every time this its 74 but i made it global so i can change it later if needed
+ 
+ 
+-#spawn (fork exec) a program (non blocking)
+-def spawn(path: str,args):
++# spawn (fork exec) a program (non blocking)
++def spawn(path: str, args):
+     pid = os.fork()
+     if pid == 0:
+         # Child process
+-        os.execv(path,args)
++        os.execv(path, args)
+     else:
+         # Parent process
+         print(f"Parent process {os.getpid()} spawned child {pid}")
+         return pid
+-
+ 
+ 
+ # Prepare system environment
+ def prepare():
+     mount_args = [
+-            "proc proc /proc", # Mount the proc filesystem
+-            "sysfs sysfs /sys", # Mount the sysfs filesystem
+-            "devtmpfs devtmpfs /dev", # Mount the devtmpfs filesystem
+-            "tmpfs tmpfs /run", # Mount the tmpfs filesystem for /run
+-            "tmpfs tmpfs /tmp", # Mount the tmpfs filesystem for /tmp
+-            "securityfs securityfs /sys/kernel/security", # Mount the securityfs filesystem
+-            "pstore pstore /sys/fs/pstore", # Mount the pstore filesystem
+-            "configfs configfs /sys/kernel/config", # Mount the configfs filesystem
+-            "efivars efivars /sys/firmware/efi/efivars", # Mount the efivars filesystem
+-        ]
++        "proc proc /proc",  # Mount the proc filesystem
++        "sysfs sysfs /sys",  # Mount the sysfs filesystem
++        "devtmpfs devtmpfs /dev",  # Mount the devtmpfs filesystem
++        "tmpfs tmpfs /run",  # Mount the tmpfs filesystem for /run
++        "tmpfs tmpfs /tmp",  # Mount the tmpfs filesystem for /tmp
++        "securityfs securityfs /sys/kernel/security",  # Mount the securityfs filesystem
++        "pstore pstore /sys/fs/pstore",  # Mount the pstore filesystem
++        "configfs configfs /sys/kernel/config",  # Mount the configfs filesystem
++        "efivars efivars /sys/firmware/efi/efivars",  # Mount the efivars filesystem
++    ]
+ 
+     for args in mount_args:
+-        os.system(f"mount -t {args}") # that is easier than using spawn() so for now i go with it 
++        os.system(
++            f"mount -t {args}"
++        )  # that is easier than using spawn() so for now i go with it
+     try:
+         Path("/etc/ris").mkdir(parents=True, exist_ok=True)
+     except OSError as e:
+         print(f"Error occurred while creating '/etc/ris' directory: {e}")
+ 
++
+ def shutdown_handler(signal, frame):
+-        global service_starter_pid
+-        power.shutdown(service_starter_pid)
++    global service_starter_pid
++    power.shutdown(service_starter_pid)
++
++
+ def reboot_handler(signal, frame):
+-        global service_starter_pid
+-        power.reboot(service_starter_pid)
++    global service_starter_pid
++    power.reboot(service_starter_pid)
++
++
+ def main():
+     global service_starter_pid
+     signal.signal(signal.SIGCHLD, reaper.reap_children)
+     prepare()
+-    service_starter_pid = spawn("/bin/sh",["sh"])
++    service_starter_pid = spawn("/bin/sh", ["sh"])
+     signal.signal(signal.SIGTERM, shutdown_handler)
+     signal.signal(signal.SIGINT, reboot_handler)
+     while True:
+         time.sleep(1000)
+ 
++
+ if __name__ == "__main__":
+-    main()
+\ No newline at end of file
++    main()
+
+--- src/power.py
++++ src/power.py
+@@ -1,77 +1,83 @@
+ import os
+ from time import sleep
+-def parse_mounts(file_path='/proc/mounts'):
++
++
++def parse_mounts(file_path="/proc/mounts"):
+     mounts = []
+-    
++
+     try:
+-        with open(file_path, 'r') as f:
++        with open(file_path, "r") as f:
+             for line in f:
+                 # split the line into parts
+                 parts = line.split()
+                 if len(parts) < 6:
+                     continue
+-                
++
+                 # split the options by comma
+-                options = parts[3].split(',')
+-                
++                options = parts[3].split(",")
++
+                 # make a dictionary for each mount entry
+                 mount_info = {
+-                    'device': parts[0],
+-                    'mount_point': parts[1],
+-                    'fs_type': parts[2],
+-                    'options': options,
+-                    'is_ro': 'ro' in options  # its read-only if 'ro' is in the options
++                    "device": parts[0],
++                    "mount_point": parts[1],
++                    "fs_type": parts[2],
++                    "options": options,
++                    "is_ro": "ro" in options,  # its read-only if 'ro' is in the options
+                 }
+                 mounts.append(mount_info)
+-                
++
+     except Exception as e:
+         print(f"error occurred: {e}")
+-        
++
+     return mounts
+ 
++
+ def umount_all(mounts):
+     # Sort mounts by the length of the mount point in descending order to unmount deeper mounts first
+-    sorted_mounts = sorted(mounts, key=lambda x: len(x['mount_point']), reverse=True)
+-    
++    sorted_mounts = sorted(mounts, key=lambda x: len(x["mount_point"]), reverse=True)
++
+     # the default protected paths that should not be unmounted
+-    protected_paths = {"/sys", "/proc", "/dev","/"}
+-    
++    protected_paths = {"/sys", "/proc", "/dev", "/"}
++
+     for mount in sorted_mounts:
+-        path = mount['mount_point']
+-        
++        path = mount["mount_point"]
++
+         if path in protected_paths:
+             continue
+-            
++
+         try:
+             os.system(f"mount -o remount,ro {path}")
+             os.system(f"umount {path}")
+             print(f"Unmounted {path}")
+         except Exception as e:
+-                print(f"Failed to unmount {path}: {e}")
++            print(f"Failed to unmount {path}: {e}")
+     os.system(f"mount -o remount,ro /")  # Remount root as read-only
+-    
++
++
+ def prepare_to_stop(service_starter_pid):
+     # Get the list of mounts
+     mounts = parse_mounts()
+-    
++
+     # Kill the service starter process
+     try:
+         os.sync()  # Flush filesystem buffers
+         os.kill(service_starter_pid, 15)  # 15 is the signal number for SIGTERM
+         print(f"Sent SIGTERM to service starter process with PID {service_starter_pid}")
+         sleep(30)  # Wait for 30 seconds to allow the process to terminate gracefully
+-        os.kill(service_starter_pid, 9)  # 9 is the signal number for SIGKILL 
++        os.kill(service_starter_pid, 9)  # 9 is the signal number for SIGKILL
+         print(f"Killed service starter process with PID {service_starter_pid}")
+         os.sync()  # Flush filesystem buffers again
+         print("Filesystem buffers flushed.")
+-        umount_all(mounts) # Unmount all mounts except the protected ones
++        umount_all(mounts)  # Unmount all mounts except the protected ones
+     except Exception as e:
+         print(f"Failed to stop: {e}")
+ 
++
+ def shutdown(service_starter_pid):
+     prepare_to_stop(service_starter_pid)
+     os.system("echo o > /proc/sysrq-trigger")  # Trigger a system shutdown
+ 
++
+ def reboot(service_starter_pid):
+     prepare_to_stop(service_starter_pid)
+-    os.system("echo b > /proc/sysrq-trigger")  # Trigger a system reboot
+\ No newline at end of file
++    os.system("echo b > /proc/sysrq-trigger")  # Trigger a system reboot
+
+--- src/reaper.py
++++ src/reaper.py
+@@ -1,5 +1,6 @@
+ import os
+ 
++
+ def reap_children(signal, frame):
+     """Reap any zombie child processes."""
+     try:
+@@ -8,6 +9,8 @@
+             pid, status = os.waitpid(-1, os.WNOHANG)
+             if pid == 0:
+                 break  # No more child processes to reap
+-            print(f"Reaped child process {pid} with status {status} exitcode: {os.WEXITSTATUS(status)}")
++            print(
++                f"Reaped child process {pid} with status {status} exitcode: {os.WEXITSTATUS(status)}"
++            )
+     except ChildProcessError:
+-        pass  # No child processes to wait for
+\ No newline at end of file
++        pass  # No child processes to wait for
+
